@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  pS3BucketName:
+    Type: String
+    Default: 'shell-janus-poc'
+  pACMCertArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:759458688635:certificate/d49411f8-cad8-46d1-bfb1-7538a1a2a511
+Resources:
+  rEdgeAuthExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - edgelambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: '/'
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+  rEdgeAuthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: auth-at-the-edge.handler
+      Role: !GetAtt rEdgeAuthExecutionRole.Arn
+      # Runtime: nodejs8.10
+      Runtime: nodejs14.x
+      Timeout: 1
+      MemorySize: 128
+      Code:
+        S3Bucket: !Join ['-', [!Ref pS3BucketName, 'lambda-files']]
+        S3Key: 'auth-at-the-edge-v7.zip'
+  rLambdaVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref rEdgeAuthFunction
+  rS3BucketFiles:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['-', [!Ref pS3BucketName, 'files']]
+  rBucketPolicyFiles:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: rS3BucketFiles
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt rCloudfrontOriginAccessIdentity.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${rS3BucketFiles.Arn}/*'
+  rCloudfrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: string-value
+  ## Cloudfront distribution
+  rCloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !Join ['.', [!Ref rS3BucketFiles, 's3.amazonaws.com']]
+            Id: shell-janus-files
+            # CustomOriginConfig:
+            #   OriginProtocolPolicy: http-only
+            S3OriginConfig:
+              OriginAccessIdentity:
+                !Join ['', ['origin-access-identity/cloudfront/', !Ref rCloudfrontOriginAccessIdentity]]
+        Enabled: 'true'
+        # CustomErrorResponses:
+        #   - ErrorCachingMinTTL: 300
+        #     ErrorCode: 403
+        #     ResponseCode: 200
+        #     ResponsePagePath: "/app/index.html"
+        #   - ErrorCachingMinTTL: 300
+        #     ErrorCode: 404
+        #     ResponseCode: 200
+        #     ResponsePagePath: "/app/index.html"
+        Comment: Cloudfront distribution for shell-janus-files
+        DefaultRootObject: index.html
+        Aliases:
+          - files.shell.caylent.dev
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          TargetOriginId: shell-janus-files
+          ForwardedValues:
+            QueryString: 'true'
+          ViewerProtocolPolicy: redirect-to-https
+          # ViewerProtocolPolicy: allow-all
+        CacheBehaviors:
+          - PathPattern: 'files/*'
+            TargetOriginId: shell-janus-files
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            ForwardedValues:
+              QueryString: 'true'
+              Headers:
+                - Origin
+              Cookies:
+                Forward: all
+            ViewerProtocolPolicy: redirect-to-https
+            # TODO - Need to make the below work instead of the 'Forward Values above'. Below is new, above is legacy
+            # TODO - Clean up the auth-at-the-edge - less logging
+            # CachePolicyId: "2e54312d-136d-493c-8eb9-b001f22f67d2"
+            # OriginRequestPolicyId: "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+            LambdaFunctionAssociations:
+              - EventType: viewer-request
+                LambdaFunctionARN: !Ref rLambdaVersion
+        PriceClass: PriceClass_100
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: blacklist
+            Locations:
+              - RU # Russia
+              - IS # Iceland
+        ViewerCertificate:
+          AcmCertificateArn: !Ref pACMCertArn
+          # CloudFrontDefaultCertificate: true
+          ## Modern Browsers
+          SslSupportMethod: sni-only
+          ## All browsers - additional charge
+          # SslSupportMethod: vip
+Outputs:
+  CloudfrontDistributionId:
+    Value: !Ref rCloudfrontDistribution

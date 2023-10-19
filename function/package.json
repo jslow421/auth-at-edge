@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "aws-jwt-verify": "^4.0.0",
+    "axios": "^1.5.1",
+    "cookie": "^0.5.0"
+  }
+}
