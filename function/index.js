@@ -15,7 +15,7 @@ const REDIRECT_URI = "https://ds060nnoq0vli.cloudfront.net/";
 // Verifier that expects valid access tokens:
 const verifier = CognitoJwtVerifier.create({
   userPoolId: USERPOOLID,
-  tokenUse: "access",
+  tokenUse: "id",
   clientId: CLIENT_ID,
 });
 
@@ -62,7 +62,7 @@ exports.handler = async (event, context, callback) => {
     data.append("code", code);
     data.append("redirect_uri", REDIRECT_URI);
 
-    let axiosConfig = {
+    const axiosConfig = {
       method: "post",
       url: OAUTH_TOKEN_URL,
       headers: {
@@ -76,7 +76,7 @@ exports.handler = async (event, context, callback) => {
       const resData = resp.data; // Assuming response contains JSON data
       console.log("Response successful");
       console.log(resData);
-      setCookieValue = cookie.serialize("authorization", resData.access_token, {
+      setCookieValue = cookie.serialize("authorization", resData.id_token, {
         maxAge: resData.expires_in,
         path: "/",
         secure: false,
@@ -140,7 +140,7 @@ exports.handler = async (event, context, callback) => {
       console.log("cookieParts:");
       console.log(cookieParts);
 
-      if (cookieParts[0].trim().toLowerCase() == "authorization") {
+      if (cookieParts[0].trim().toLowerCase() === "authorization") {
         console.log("Found authorization cookie");
         console.log(cookieParts[1]);
         jwtToken = cookieParts[1];
