@@ -1,0 +1,9 @@
+{
+    "USERPOOLID": "us-east-1_sj7GL1riC",
+    "CLIENT_ID": "75lh0ps95epe0gsu3hu3m1u63h",
+    "COGNITO_HOSTED_UI_URL": "https://caylent-genai.auth.us-east-1.amazoncognito.com",
+    "OAUTH_TOKEN_URL": "https://caylent-genai.auth.us-east-1.amazoncognito.com/oauth2/token",
+    "HOMEPAGE_URL": "https://d16vlsb5z4g5rp.cloudfront.net/index.html",
+    "REDIRECT_URI": "https://d16vlsb5z4g5rp.cloudfront.net/"
+}
+  
